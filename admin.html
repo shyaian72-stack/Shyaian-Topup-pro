@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="/admin-manifest.json">
+<link rel="apple-touch-icon" href="/admin-icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FFX Admin">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Admin Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -242,6 +248,14 @@ main.sm{max-width:520px;padding:0}
 .g2 .lb{margin-top:0!important}
 .rl-row .ta{min-height:72px;background:#fff}
 .bn-row{background:#f6f9ff}
+
+.xw{display:grid;gap:10px;padding:4px 0 80px}
+.xch{display:flex;gap:8px;overflow-x:auto}.xc{flex:none;height:36px;padding:0 14px;border-radius:18px;border:1.5px solid var(--bd);background:#fff;font-weight:700;color:var(--mu);cursor:pointer}.xc.on{background:var(--v);border-color:var(--v);color:#fff}
+.xr{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:12px;display:grid;gap:6px}
+.xt{display:flex;justify-content:space-between;gap:8px}.xm{color:var(--mu);font-size:13px;word-break:break-word}
+.xi{height:42px}.xb{display:flex;gap:8px}.xb .btn{flex:1}
+.xcode{font-family:ui-monospace,monospace;font-size:13px;width:100%;border:1.5px solid var(--bd);border-radius:12px;padding:10px;min-height:90px;background:#fff;color:var(--tx)}
+.s-notice{display:flex;align-items:center;gap:10px;margin:10px 0;padding:10px 46px 10px 12px;border-radius:12px;background:#0b1530;color:#fff;font-size:13px}.s-notice p{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.s-nl{flex-shrink:0;padding:4px 10px;border-radius:99px;border:1px solid rgba(255,255,255,.25);font-weight:700}.s-notice i{opacity:.7}
 </style>
 </head>
 <body>
@@ -285,6 +299,7 @@ main.sm{max-width:520px;padding:0}
     </div>
     <div class="err" id="lgErr"></div>
     <button class="btn block" id="lgBtn" type="submit">Log in</button>
+    <button type="button" id="lgInstall" style="display:none;margin:14px auto 0;background:none;border:0;color:var(--v);font-weight:700;font-size:14px;cursor:pointer">Install app</button>
   </form>
 </div>
 
@@ -296,6 +311,28 @@ main.sm{max-width:520px;padding:0}
 <div id="gh" role="status"></div>
 <div id="toast"></div>
 
+<script>
+(function(){
+  var dp=null;
+  function standalone(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true}
+  function ios(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
+  window.adminApp={
+    canInstall:function(){return !standalone()},
+    install:function(done){
+      if(dp){var p=dp;dp=null;p.prompt();p.userChoice.then(function(){if(done)done()}).catch(function(){});return ''}
+      return ios()?'On iPhone: tap the Share button, then "Add to Home Screen".':'Open the browser menu (\u22ee) and tap "Install app" or "Add to Home screen".';
+    }
+  };
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e});
+  window.addEventListener('appinstalled',function(){dp=null;var b=document.getElementById('lgInstall');if(b)b.style.display='none'});
+  if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/admin-sw.js',{scope:'/admin'}).catch(function(){})})}
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('lgInstall');if(!b||standalone())return;
+    b.style.display='block';
+    b.onclick=function(){var m=window.adminApp.install();if(m)alert(m)};
+  });
+})();
+</script>
 <script>
 (function(){
 'use strict';
@@ -368,7 +405,12 @@ async function enter(){
 }
 
 var SECTIONS=[
-  {id:'site',title:'Site Editor',icon:'edit',render:renderSite}
+  {id:'site',title:'Site Editor',icon:'edit',render:renderSite},
+  {id:'orders',title:'Orders',icon:'okc',render:renderOrders},
+  {id:'addmoney',title:'Add Money requests',icon:'plus',render:renderAddMoney},
+  {id:'users',title:'Users & balance',icon:'edit',render:renderUsers},
+  {id:'codes',title:'Redeem codes',icon:'edit',render:renderCodes},
+  {id:'payment',title:'Payment numbers',icon:'edit',render:renderPayment}
 ];
 
 function openMenu(){
@@ -379,6 +421,12 @@ function openMenu(){
       x.onclick=function(){closeSheet();show(sc.id)};
       b.appendChild(x);
     });
+    if(window.adminApp&&window.adminApp.canInstall()){
+      var ia=document.createElement('button');ia.type='button';ia.className='mi';
+      ia.innerHTML=icon('plus','width:18px;height:18px')+'Install app';
+      ia.onclick=function(){var m=window.adminApp.install(closeSheet);if(m){closeSheet();toast(m,'ok')}};
+      b.appendChild(ia);
+    }
     var l=document.createElement('a');l.className='mi';l.href='/';l.target='_blank';l.rel='noopener';
     l.innerHTML=icon('ext','width:18px;height:18px')+'View main site';b.appendChild(l);
     var o=document.createElement('button');o.type='button';o.className='mi out';
@@ -523,7 +571,7 @@ function drawSite(){
   if(!siteRoot||!document.body.contains(siteRoot))return;
   var c=state.cfg,I=c.images,logo=I.logo.src||I.logo.def,bn=c.banners,q=c.quick,P=c.products;
   if(prevIdx>=bn.length)prevIdx=0;
-  function pc(p){var im=I[p.img];return '<div class="ed"><div class="s-card" data-prod="'+p.key+'"><div class="im"><img src="'+esc(im.src||im.def)+'" alt=""></div><div class="cl">'+esc(p.name)+'</div></div>'+pen('Edit '+p.name,'p:'+p.key,true)+'</div>'}
+  function pc(p){var im=I[p.img];return '<div class="ed"'+(p.hidden?' style="opacity:.45"':'')+'><div class="s-card" data-prod="'+p.key+'"><div class="im"><img src="'+esc(im.src||im.def)+'" alt=""></div><div class="cl">'+esc(p.name)+(p.hidden?' (hidden)':'')+'</div></div>'+pen('Edit '+p.name,'p:'+p.key,true)+'</div>'}
   function sec(id){return '<div class="ed s-sec"><i></i><h3>'+esc(tv(id))+'</h3>'+pen('Edit title','t:'+id)+'</div>'}
   var top=P.filter(function(p){return p.key!=='uc'}),uc=P.filter(function(p){return p.key==='uc'});
   var h='';
@@ -532,6 +580,7 @@ function drawSite(){
      '<div class="s-hr"><span class="s-wl">0৳</span><span class="s-av"></span></div>'+
      '</div></div>';
   h+='<div class="s-wrap">'+
+     '<div class="ed s-notice"><span class="s-nl">🔔 নোটিশ</span><p>'+(tv('notice')?esc(tv('notice')):'<i>Notice bar is off. Tap the pen to add a message.</i>')+'</p>'+pen('Edit notice bar','t:notice')+'</div>'+
      '<div class="ed hero-ed"><section class="s-hero"><img id="sHeroImg" src="'+esc(bn[prevIdx].src)+'" alt="">'+
        '<div class="s-dots">'+bn.map(function(b,i){return '<i data-i="'+i+'" class="'+(i===prevIdx?'on':'')+'"></i>'}).join('')+'</div></section>'+
        pen('Edit banner','banners',true)+'</div>'+
@@ -539,6 +588,7 @@ function drawSite(){
         return '<div class="ed"><span class="s-q"><span class="s-ic">'+svgi(QICON[i],1)+'</span><b>'+esc(x.label)+'</b></span>'+pen('Edit '+QNAME[i],'q'+i)+'</div>';
      }).join('')+'</div>'+
      sec('sec1')+'<div class="s-grid">'+top.map(pc).join('')+'</div>'+
+     '<div style="margin:14px 0 4px"><button type="button" class="btn block" id="addProd">'+icon('plus','width:16px;height:16px')+'Add Product</button></div>'+
      sec('sec2')+'<div class="s-grid">'+uc.map(pc).join('')+'</div>'+
      '<div class="s-sec"><i></i><h3>POPUP</h3></div>'+
      '<div class="ed"><div class="s-pop"><img src="'+esc(I.pop.src||I.pop.def)+'" alt=""><p>'+esc(tv('pop')).replace(/\n/g,'<br>')+'</p><span class="pcl">CLOSE</span></div>'+pen('Edit popup','pop',true)+'</div>'+
@@ -562,6 +612,7 @@ function drawSite(){
     };
   });
   siteRoot.querySelectorAll('[data-prod]').forEach(function(cd){cd.onclick=function(){editProduct(cd.dataset.prod)}});
+  var addBtn=siteRoot.querySelector('#addProd');if(addBtn)addBtn.onclick=addProduct;
   siteRoot.querySelectorAll('.s-dots i').forEach(function(d){
     d.onclick=function(){
       prevIdx=parseInt(d.dataset.i,10);
@@ -724,6 +775,30 @@ function editPop(){
   });
 }
 
+function addProduct(){
+  openSheet('Add Product',function(b){
+    var d=sc(1,'plus','New product','Give it a name. Next you can add the picture, packages and prices.');
+    $('.sc-b',d).innerHTML=
+      '<label class="lb">Product name</label><input class="inp" id="npName" maxlength="80" placeholder="e.g. Free Fire Special">'+
+      '<div class="btns"><button type="button" class="btn sm" id="npGo">'+icon('plus','width:16px;height:16px')+'Create product</button></div>';
+    b.appendChild(d);
+    var inp=$('#npName',d),go=$('#npGo',d);
+    setTimeout(function(){inp.focus()},50);
+    async function create(){
+      var name=inp.value.trim();
+      if(!name){toast('Enter a product name','bad');return}
+      go.disabled=true;var old=go.innerHTML;go.innerHTML='<span class="spin"></span>';
+      try{
+        var r=await api('/api/admin/custom',{action:'add',name:name});
+        var key=r.newKey;state.cfg=r;drawSite();
+        toast('Product created. Now add the picture and packages','ok');
+        editProduct(key);
+      }catch(e){toast(e.message,'bad');go.disabled=false;go.innerHTML=old}
+    }
+    go.onclick=create;
+    inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();create()}};
+  });
+}
 function editProduct(key){
   openSheet('Edit: '+prodOf(key).name,function(b){drawProduct(b,key)});
 }
@@ -759,11 +834,11 @@ function drawProduct(b,key){
 
   /* 3. Packages & prices */
   if(p.hasGrid){
-    var pk=p.packages.map(function(x){return {label:x.label,name:x.name,price:x.price}});
+    var pk=p.packages.map(function(x){return {label:x.label,name:x.name,price:x.price,hidden:!!x.hidden,stockOut:!!x.stockOut}});
     var pb=sc(n++,'wal','Packages & prices','These show on the product page');
     var pbody=$('.sc-b',pb);b.appendChild(pb);
     var sync=function(){pbody.querySelectorAll('.pk-row').forEach(function(r,i){
-      pk[i].label=$('[data-f=label]',r).value;pk[i].name=$('[data-f=name]',r).value;pk[i].price=$('[data-f=price]',r).value})};
+      pk[i].label=$('[data-f=label]',r).value;pk[i].name=$('[data-f=name]',r).value;pk[i].price=$('[data-f=price]',r).value;pk[i].hidden=$('[data-f=hidden]',r).checked;pk[i].stockOut=$('[data-f=stockOut]',r).checked})};
     var drawPk=function(){
       pbody.innerHTML='<div id="pkRows"></div>'+
         '<button type="button" class="btn ghost block" id="pkAdd">'+ic('plus')+'Add package</button>'+
@@ -778,8 +853,10 @@ function drawProduct(b,key){
             '<button type="button" class="ib del" data-a="del" '+(pk.length<=1?'disabled':'')+' aria-label="Delete">'+ic('trash')+'</button></div></div>'+
           '<label class="lb">Package name</label><input class="inp" data-f="label" placeholder="e.g. 100 Diamond" maxlength="140">'+
           '<div class="g2"><div><label class="lb">Price (BDT)</label><input class="inp" data-f="price" inputmode="decimal" placeholder="85"></div>'+
-          '<div><label class="lb">Order name <span class="opt">(optional)</span></label><input class="inp" data-f="name" placeholder="Same as name" maxlength="100"></div></div>';
-        $('[data-f=label]',r).value=x.label;$('[data-f=price]',r).value=x.price;$('[data-f=name]',r).value=(x.name&&x.name!==x.label)?x.name:'';
+          '<div><label class="lb">Order name <span class="opt">(optional)</span></label><input class="inp" data-f="name" placeholder="Same as name" maxlength="100"></div></div>'+
+          '<label class="lb" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" data-f="hidden"> Hide from website (customers cannot see or buy)</label>'+
+          '<label class="lb" style="display:flex;gap:8px;align-items:center;margin-top:8px;color:#dc2626;font-weight:700"><input type="checkbox" data-f="stockOut"> STOCK OUT (red badge shows, customers cannot buy)</label>';
+        $('[data-f=label]',r).value=x.label;$('[data-f=price]',r).value=x.price;$('[data-f=name]',r).value=(x.name&&x.name!==x.label)?x.name:'';$('[data-f=hidden]',r).checked=!!x.hidden;$('[data-f=stockOut]',r).checked=!!x.stockOut;
         $('[data-a=up]',r).onclick=function(){sync();var t=pk[i];pk[i]=pk[i-1];pk[i-1]=t;drawPk()};
         $('[data-a=down]',r).onclick=function(){sync();var t=pk[i];pk[i]=pk[i+1];pk[i+1]=t;drawPk()};
         $('[data-a=del]',r).onclick=function(){if(confirm('Delete this package?')){sync();pk.splice(i,1);drawPk()}};
@@ -796,7 +873,7 @@ function drawProduct(b,key){
           if(!pk[i].label.trim()){toast('Package '+(i+1)+': name is empty','bad');return}
           if(String(pk[i].price).trim()===''||!isFinite(Number(pk[i].price))||Number(pk[i].price)<0){toast('Package '+(i+1)+': enter a valid price','bad');return}
         }
-        patch({packages:pk.map(function(x){return {label:x.label.trim(),name:String(x.name||'').trim(),price:Number(x.price)}})});
+        patch({packages:pk.map(function(x){return {label:x.label.trim(),name:String(x.name||'').trim(),price:Number(x.price),hidden:!!x.hidden,stockOut:!!x.stockOut}})});
       };
       var rs=$('#pkRst',pbody);
       if(rs)rs.onclick=function(){if(confirm('Restore the default packages and prices?'))patch({packages:null})};
@@ -831,6 +908,30 @@ function drawProduct(b,key){
     drawRl();
   }
 
+  /* Delete a product made with "Add Product" */
+  if(p.isCustom){
+    var dz=sc(null,'trash','Delete this product','Removes it from the website for good','danger');
+    $('.sc-b',dz).innerHTML='<button type="button" class="btn danger block">'+ic('trash')+'Delete this product</button>';
+    $('button',dz).onclick=async function(){
+      if(!confirm('Delete "'+p.name+'" for good? Its picture and packages will be removed.'))return;
+      b.classList.add('busy');
+      try{state.cfg=await api('/api/admin/custom',{action:'delete',key:key});toast('Deleted','ok');closeSheet();drawSite()}
+      catch(e){toast(e.message,'bad');b.classList.remove('busy')}
+    };
+    b.appendChild(dz);
+  }
+  /* Hide / show the empty "New Product" placeholder card */
+  if(key==='np'){
+    var hz=sc(null,'eye','Show on website',p.hidden?'This card is hidden from customers':'Customers can see this card');
+    $('.sc-b',hz).innerHTML='<button type="button" class="btn block'+(p.hidden?'':' ghost')+'">'+(p.hidden?'Show this card again':'Hide this card from the website')+'</button>';
+    $('button',hz).onclick=async function(){
+      b.classList.add('busy');
+      try{state.cfg=await api('/api/admin/custom',{action:'hideNp',value:!p.hidden});toast('Saved, the website is updated','ok');refresh()}
+      catch(e){toast(e.message,'bad');b.classList.remove('busy')}
+    };
+    b.appendChild(hz);
+  }
+
   /* Reset everything */
   if(p.anyCustom){
     var z=sc(null,'undo','Reset this product','Removes all your changes for this product','danger');
@@ -843,6 +944,125 @@ function drawProduct(b,key){
     };
     b.appendChild(z);
   }
+}
+
+/* ---- Orders, Add Money, Users, Codes, Payment numbers ---- */
+function box(main){var d=document.createElement('div');d.className='xw';main.appendChild(d);return d}
+function when(t){try{return new Date(t).toLocaleString()}catch(e){return ''}}
+function chips(p,opts,cur,on){var c=document.createElement('div');c.className='xch';opts.forEach(function(o){var b=document.createElement('button');b.type='button';b.className='xc'+(o[0]===cur?' on':'');b.textContent=o[1];b.onclick=function(){on(o[0])};c.appendChild(b)});p.appendChild(c)}
+function card(p,h){var c=document.createElement('div');c.className='xr';c.innerHTML=h;p.appendChild(c);return c}
+function mini(l,cls,fn){var b=document.createElement('button');b.type='button';b.className='btn sm '+(cls||'');b.textContent=l;b.onclick=fn;return b}
+function act(btn,fn){btn.disabled=true;fn().catch(function(e){toast(e.message,'bad');btn.disabled=false})}
+function who(c){c=c||{};return esc(c.name||'')+' · '+esc(c.email||'')}
+
+function renderOrders(main){
+  var st='Pending',w=box(main);
+  async function load(){
+    w.innerHTML='';
+    chips(w,[['Pending','Pending'],['Completed','Done'],['Rejected','Rejected'],['','All']],st,function(v){st=v;load()});
+    var l=card(w,'Loading...');
+    try{
+      var r=await api('/api/admin/orders'+(st?'?status='+st:''));l.remove();
+      if(!r.orders.length)card(w,'<div class="xm">No orders</div>');
+      r.orders.forEach(function(o){
+        var c=card(w,'<div class="xt"><b>'+esc(o.packageName)+'</b><span>BDT '+esc(o.price)+'</span></div>'+
+          '<div class="xm">Player UID: <b>'+esc(o.uid)+'</b></div><div class="xm">'+who(o.customer)+'</div>'+
+          '<div class="xm">'+(o.payMethod==='wallet'?'Paid from wallet':'Instant '+esc(o.via)+' · '+esc(o.senderNumber)+' · TrxID '+esc(o.trxId))+(o.autoVerified?' (auto verified)':'')+'</div>'+
+          '<div class="xm">'+when(o.createdAt)+' · <b>'+esc(o.status)+'</b>'+(o.adminNote?' · '+esc(o.adminNote):'')+'</div>'+(o.deliveredCode?'<div class="xm">Sent to customer: '+esc(o.deliveredCode)+'</div>':''));
+        if(o.status!=='Pending')return;
+        c.insertAdjacentHTML('beforeend','<input class="inp xi" placeholder="Message / code for customer (optional)">');
+        var inp=c.querySelector('input'),bar=document.createElement('div');bar.className='xb';
+        var ok=mini('Deliver','',function(){act(ok,async function(){await api('/api/admin/orders/'+o._id+'/complete',{code:inp.value,note:''});toast('Delivered','ok');load()})});
+        var no=mini('Reject','danger',function(){if(!confirm('Reject this order?'+(o.payMethod==='wallet'?' The wallet money is refunded automatically.':'')))return;act(no,async function(){await api('/api/admin/orders/'+o._id+'/reject',{note:inp.value});toast('Rejected','ok');load()})});
+        bar.appendChild(ok);bar.appendChild(no);c.appendChild(bar);
+      });
+    }catch(e){l.textContent=e.message}
+  }
+  load();
+}
+
+function renderAddMoney(main){
+  var st='pending',w=box(main);
+  async function load(){
+    w.innerHTML='';
+    chips(w,[['pending','Pending'],['approved','Approved'],['rejected','Rejected'],['','All']],st,function(v){st=v;load()});
+    var l=card(w,'Loading...');
+    try{
+      var r=await api('/api/admin/addmoney'+(st?'?status='+st:''));l.remove();
+      if(!r.requests.length)card(w,'<div class="xm">No requests</div>');
+      r.requests.forEach(function(q){
+        var c=card(w,'<div class="xt"><b>BDT '+esc(q.amount)+' · '+esc(q.method)+'</b><span>'+esc(q.status)+'</span></div>'+
+          '<div class="xm">'+who(q.customer)+'</div><div class="xm">Sender '+esc(q.senderNumber)+' · TrxID <b>'+esc(q.trxId)+'</b></div><div class="xm">'+when(q.createdAt)+(q.autoVerified?' · auto verified':'')+'</div>');
+        if(q.status!=='pending')return;
+        var bar=document.createElement('div');bar.className='xb';
+        var ok=mini('Approve','',function(){if(!confirm('Add BDT '+q.amount+' to this wallet?'))return;act(ok,async function(){await api('/api/admin/addmoney/'+q._id+'/approve',{note:''});toast('Approved, money added','ok');load()})});
+        var no=mini('Reject','danger',function(){act(no,async function(){await api('/api/admin/addmoney/'+q._id+'/reject',{note:''});toast('Rejected','ok');load()})});
+        bar.appendChild(ok);bar.appendChild(no);c.appendChild(bar);
+      });
+    }catch(e){l.textContent=e.message}
+  }
+  load();
+}
+
+function renderUsers(main){
+  var w=box(main),t;
+  w.innerHTML='<input class="inp" placeholder="Search name or email">';
+  var inp=w.querySelector('input'),list=document.createElement('div');list.className='xw';w.appendChild(list);
+  async function load(){
+    list.innerHTML='';var l=card(list,'Loading...');
+    try{
+      var r=await api('/api/admin/users?q='+encodeURIComponent(inp.value.trim()));l.remove();
+      card(list,'<div class="xm">'+r.total+' user(s)'+(r.total>r.users.length?', showing newest '+r.users.length+' (use search)':'')+'</div>');
+      r.users.forEach(function(u){
+        var c=card(list,'<div class="xt"><b>'+esc(u.name)+'</b><span>BDT '+esc(u.balance)+'</span></div><div class="xm">'+esc(u.email)+' · joined '+when(u.createdAt)+'</div>');
+        var bar=document.createElement('div');bar.className='xb';
+        function adj(action){
+          var a=prompt((action==='add'?'Add how much (BDT) to ':'Deduct how much (BDT) from ')+u.name+'?');if(!a)return;
+          api('/api/admin/users/'+u.id+'/balance',{amount:a,action:action,note:''}).then(function(r){toast('New balance: BDT '+r.balance,'ok');load()}).catch(function(e){toast(e.message,'bad')});
+        }
+        bar.appendChild(mini('Add balance','',function(){adj('add')}));bar.appendChild(mini('Deduct','danger',function(){adj('subtract')}));c.appendChild(bar);
+      });
+    }catch(e){l.textContent=e.message}
+  }
+  inp.oninput=function(){clearTimeout(t);t=setTimeout(load,350)};
+  load();
+}
+
+function renderCodes(main){
+  var w=box(main);
+  async function load(){
+    w.innerHTML='';
+    var f=card(w,'<b>Create redeem codes</b><input class="inp" id="ca" inputmode="decimal" placeholder="Amount (BDT) for each code"><input class="inp" id="cn" inputmode="numeric" placeholder="How many codes (1-100)" value="1">');
+    var out=document.createElement('textarea');out.className='xcode hidden';out.readOnly=true;
+    var go=mini('Generate','',function(){act(go,async function(){
+      var r=await api('/api/admin/codes',{amount:f.querySelector('#ca').value,count:f.querySelector('#cn').value});
+      toast(r.codes.length+' code(s) created','ok');out.value=r.codes.join('\n');out.classList.remove('hidden');go.disabled=false;
+    })});
+    f.appendChild(go);f.appendChild(out);
+    var l=card(w,'Loading...');
+    try{
+      var r=await api('/api/admin/codes');l.remove();
+      card(w,'<b>Recent codes</b>');
+      r.codes.forEach(function(c){card(w,'<div class="xt"><b style="font-family:ui-monospace,monospace">'+esc(c.code)+'</b><span>BDT '+esc(c.amount)+'</span></div><div class="xm">'+(c.usedBy?'Used '+when(c.usedAt):'Not used yet')+'</div>')});
+    }catch(e){l.textContent=e.message}
+  }
+  load();
+}
+
+function renderPayment(main){
+  var w=box(main);
+  (async function(){
+    try{
+      var r=await api('/api/admin/payment'),p=r.payment||{};
+      var c=card(w,'<b>Payment numbers shown to customers</b><div class="xm">Leave a box empty to hide that method number.</div>'+
+        [['bkash','bKash'],['nagad','Nagad'],['rocket','Rocket']].map(function(m){return '<label class="lb">'+m[1]+'</label><input class="inp" data-k="'+m[0]+'" inputmode="tel" maxlength="20" value="'+esc(p[m[0]]||'')+'">'}).join(''));
+      var sv=mini('Save numbers','',function(){act(sv,async function(){
+        var b={};c.querySelectorAll('input').forEach(function(i){b[i.dataset.k]=i.value});
+        await api('/api/admin/payment',b);toast('Saved, customers see the new numbers','ok');sv.disabled=false;
+      })});
+      c.appendChild(sv);
+    }catch(e){card(w,esc(e.message))}
+  })();
 }
 
 (async function(){
